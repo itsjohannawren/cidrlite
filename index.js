@@ -77,7 +77,6 @@ function isCIDRv6 (data) {
 
 module.exports.isInCIDR = isInCIDR;
 function isInCIDR (needle, haystack) {
-	console.info (needle + ' in ' + haystack + '?');
 	var result, network, length, broadcast, index, first, bit, octet;
 
 	if (! isIP (needle) || ! isCIDR (haystack)) {
