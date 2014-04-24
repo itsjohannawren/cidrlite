@@ -96,50 +96,8 @@ function isInCIDR (needle, haystack) {
 	// Store the prefix length
 	length = parseInt (haystack [1], 10);
 
-	// Fix the network to be sure it is really the network based on the length
-	for (index = 0, result = ''; index < network.length; index++) {
-		if (length - (index * 8) >= 8) {
-			// Whole byte
-			result += network.charAt (index);
-
-		} else if (length - (index * 8) >= 0) {
-			// Partial byte
-			octet = 0;
-			for (bit = 7; bit >= 8 - (length - (index * 8)); bit--) {
-				octet |= 1 << bit;
-			}
-			octet = network.charCodeAt (index) & octet;
-			result += String.fromCharCode (octet);
-
-		} else {
-			// Useless
-			result += String.fromCharCode (0);
-		}
-	}
-	network = result;
-
-	// Calculate the broadcast
-	for (index = 0, result = ''; index < broadcast.length; index++) {
-		if (length - (index * 8) >= 8) {
-			// Whole byte
-			result += broadcast.charAt (index);
-
-		} else if (length - (index * 8) >= 0) {
-			// Partial byte
-			octet = 0;
-			for (bit = 7; bit >= 8 - (length - (index * 8)); bit--) {
-				octet |= 1 << bit;
-			}
-			octet ^= 255;
-			octet |= broadcast.charCodeAt (index);
-			result += String.fromCharCode (octet);
-
-		} else {
-			// Useless
-			result += String.fromCharCode (255);
-		}
-	}
-	broadcast = result;
+	network = networkify (network, length);
+	broadcast = broadcastify (broadcast, length);
 
 	if ((needle >= network) && (needle <= broadcast)) {
 		return (true);
@@ -150,6 +108,63 @@ function isInCIDR (needle, haystack) {
 module.exports.isInRange = isInRange;
 function isInRange (needle, ground, sky) {
 
+}
+
+module.exports.inet_pton = networkify;
+function networkify (address, length) {
+	var result, index, octet;
+
+	// Fix the network to be sure it is really the network based on the length
+	for (index = 0, result = ''; index < address.length; index++) {
+		if (length - (index * 8) >= 8) {
+			// Whole byte
+			result += address.charAt (index);
+
+		} else if (length - (index * 8) >= 0) {
+			// Partial byte
+			octet = 0;
+			for (bit = 7; bit >= 8 - (length - (index * 8)); bit--) {
+				octet |= 1 << bit;
+			}
+			octet = address.charCodeAt (index) & octet;
+			result += String.fromCharCode (octet);
+
+		} else {
+			// Useless
+			result += String.fromCharCode (0);
+		}
+	}
+	
+	return (result);
+}
+
+module.exports.inet_pton = broadcastify;
+function broadcastify (address, length) {
+	var result, index, octet;
+
+	// Calculate the broadcast
+	for (index = 0, result = ''; index < address.length; index++) {
+		if (length - (index * 8) >= 8) {
+			// Whole byte
+			result += address.charAt (index);
+
+		} else if (length - (index * 8) >= 0) {
+			// Partial byte
+			octet = 0;
+			for (bit = 7; bit >= 8 - (length - (index * 8)); bit--) {
+				octet |= 1 << bit;
+			}
+			octet ^= 255;
+			octet |= address.charCodeAt (index);
+			result += String.fromCharCode (octet);
+
+		} else {
+			// Useless
+			result += String.fromCharCode (255);
+		}
+	}
+	
+	return (result);
 }
 
 module.exports.inet_pton = inet_pton;
