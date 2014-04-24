@@ -110,7 +110,7 @@ function isInRange (needle, ground, sky) {
 
 }
 
-module.exports.inet_pton = networkify;
+module.exports.networkify = networkify;
 function networkify (address, length) {
 	var result, index, octet;
 
@@ -138,7 +138,7 @@ function networkify (address, length) {
 	return (result);
 }
 
-module.exports.inet_pton = broadcastify;
+module.exports.broadcastify = broadcastify;
 function broadcastify (address, length) {
 	var result, index, octet;
 
