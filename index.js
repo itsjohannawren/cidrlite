@@ -182,7 +182,7 @@ function rangeToCIDR (range) {
 		return (null);
 	}
 
-	if (range [0].greater (range [1])) {
+	if (range [0] > range [1]) {
 		// Well, that's wrong...
 		var temp = range [1];
 		range [1] = range [0];
