@@ -1,6 +1,6 @@
 {
 	"name": "cidrlite",
-	"version": "0.1.3",
+	"version": "0.2.0",
 	"description": "NodeJS version of Perl's Net::CIDR::Lite package",
 	"author": {
 		"name": "Jeff Walter",
@@ -13,13 +13,17 @@
 		"url": "git://github.com/jeffwalter/cidrlite.git"
 	},
 	"dependencies": {
+		"big-integer": "1.1.x"
 	},
 	"readmeFilename": "README.md",
 	"bugs": {
 		"url": "https://github.com/jeffwalter/cidrlite/issues"
 	},
+	"scripts": {
+		"test": "/usr/bin/env node test/index.js"
+	},
 	"homepage": "https://github.com/jeffwalter/cidrlite",
-	"_id": "cidrlite@0.1.3",
+	"_id": "cidrlite@0.2.0",
 	"dist": {
 		"shasum": ""
 	},

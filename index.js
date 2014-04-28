@@ -1,19 +1,20 @@
 var net = require ('net');
+var bigint = require ('big-integer');
 
 // The cidrlite "class"
 // ============================================================================
-module.exports.cidrlite = cidrlite;
-function cidrlite () {
-	// Internal state
-	this.__IPV4 = {};
-	this.__IPV6 = {};
-}
-
+//module.exports.cidrlite = cidrlite;
+//function cidrlite () {
+//	// Internal state
+//	this.__IPV4 = {};
+//	this.__IPV6 = {};
+//}
+//
 //cidrlite.prototype.FUNCTION = function () {
 //	
 //};
 
-// Quick check functions
+// Standalone functions
 // ============================================================================
 
 module.exports.isIP = isIP;
@@ -29,7 +30,7 @@ module.exports.isIPv4 = isIPv4;
 function isIPv4 (data) {
 	if (data && (typeof (data) == 'string')) {
 		data = net.isIP (data);
-		return (data == 4 ? data : null);
+		return (data == 4 ? true : null);
 	}
 	return (null);
 }
@@ -38,7 +39,7 @@ module.exports.isIPv6 = isIPv6;
 function isIPv6 (data) {
 	if (data && (typeof (data) == 'string')) {
 		data = net.isIP (data);
-		return (data == 6 ? data : null);
+		return (data == 6 ? true : null);
 	}
 	return (null);
 }
@@ -46,7 +47,12 @@ function isIPv6 (data) {
 module.exports.isCIDR = isCIDR;
 function isCIDR (data) {
 	if (data && (typeof (data) == 'string')) {
-		return (isCIDRv4 (data) || isCIDRv6 (data));
+		if (isCIDRv4 (data)) {
+			return (4);
+
+		} else if (isCIDRv6 (data)) {
+			return (6);
+		}
 	}
 	return (null);
 }
@@ -56,7 +62,7 @@ function isCIDRv4 (data) {
 	if (data && (typeof (data) == 'string')) {
 		if ((matches = data.match (/^([^\/]+)\/(\d+)$/)) !== null) {
 			if (isIPv4 (matches [1]) && (matches [2] >=0) && (matches [2] <= 32)) {
-				return (4);
+				return (true);
 			}
 		}
 	}
@@ -68,7 +74,7 @@ function isCIDRv6 (data) {
 	if (data && (typeof (data) == 'string')) {
 		if ((matches = data.match (/^([^\/]+)\/(\d+)$/)) !== null) {
 			if (isIPv6 (matches [1]) && (matches [2] >=0) && (matches [2] <= 128)) {
-				return (6);
+				return (true);
 			}
 		}
 	}
@@ -79,10 +85,17 @@ module.exports.isInCIDR = isInCIDR;
 function isInCIDR (needle, haystack) {
 	var result, network, length, broadcast, index, first, bit, octet;
 
-	if (! isIP (needle) || ! isCIDR (haystack)) {
-		return (null);
-	}
-	if (isIP (needle) != isCIDR (haystack)) {
+	if (isIPv4 (needle)) {
+		if (! isCIDRv4 (haystack)) {
+			return (null);
+		}
+
+	} else if (isIPv6 (needle)) {
+		if (! isCIDRv6 (haystack)) {
+			return (null);
+		}
+
+	} else {
 		return (null);
 	}
 
@@ -92,12 +105,14 @@ function isInCIDR (needle, haystack) {
 	haystack = haystack.split ('/');
 	// Convert the network to string
 	network = inet_pton (haystack [0]);
+	// Fix the prefix base
+	network = networkify (network, haystack [1]);
+	
 	broadcast = inet_pton (haystack [0]);
+	broadcast = broadcastify (broadcast, haystack [1]);
+
 	// Store the prefix length
 	length = parseInt (haystack [1], 10);
-
-	network = networkify (network, length);
-	broadcast = broadcastify (broadcast, length);
 
 	if ((needle >= network) && (needle <= broadcast)) {
 		return (true);
@@ -105,14 +120,134 @@ function isInCIDR (needle, haystack) {
 	return (null);
 }
 
+module.exports.cidrToRange = cidrToRange;
+function cidrToRange (cidr, assumeCorrect) {
+	var family, ground, sky, mask;
+
+	// Check for a "valid" CIDR
+	if (! isCIDR (cidr)) {
+		return (null);
+	}
+
+	// Break the CIDR apart
+	ground = cidr.split ('/');
+	mask = ground [1];
+	ground = inet_pton (ground [0]);
+
+	if (ground.length == 4) {
+		family = 4;
+
+	} else if (ground.length == 16) {
+		family = 6;
+
+	} else {
+		return (null);
+	}
+
+	if (! assumeCorrect) {
+		// Fix the prefix base
+		ground = networkify (ground, mask);
+	}
+
+	// Set the top of the prefix to the integer form of the base
+	sky = inet_ntoi (ground);
+
+	// Increment the top of the prefix for the size of the block
+	sky = sky.add (bigint (2).pow (((family == 4) ? 32 : (family == 6) ? 128 : 0) - mask)).minus (1) ;
+	//console.info (sky);
+
+	return ([ground, inet_iton (sky, family)]);
+}
+
+module.exports.rangeToCIDR = rangeToCIDR;
+function rangeToCIDR (range) {
+	var result = [], family, position, index;
+
+	if (! range || range.length != 2) {
+		return (null);
+	}
+	if (range [0].length == 4) {
+		family = 4;
+		if (range [1].length != 4) {
+			return (null);
+		}
+
+	} else if (range [0].length == 16) {
+		family = 6;
+		if (range [1].length != 16) {
+			return (null);
+		}
+
+	} else {
+		return (null);
+	}
+
+	if (range [0].greater (range [1])) {
+		// Well, that's wrong...
+		var temp = range [1];
+		range [1] = range [0];
+		range [0] = temp;
+		temp = null;
+	}
+
+	while (range [0] <= range [1]) {
+		for (index = 0; index <= ((family == 4) ? 32 : (family == 6) ? 128 : 0); index++) {
+			if ((range [0] == networkify (range [0], index)) && (broadcastify (range [0], index) <= range [1])) {
+				result.push (inet_ntop (range [0]) + '/' + index);
+				range [0] = inet_iton (
+					inet_ntoi (
+						range [0]).add (bigint (2).pow (((family == 4) ? 32 : (family == 6) ? 128 : 0) - index)
+					),
+					family
+				);
+				break;
+			}
+		}
+	}
+
+	return (result);
+}
+
 module.exports.isInRange = isInRange;
 function isInRange (needle, ground, sky) {
+	if (! needle || ! ground || ! sky) {
+		return (null);
+	}
+	if ((needle.length != 4) && (needle.length != 16)) {
+		if (! isIP (needle)) {
+			return (null);
+		}
+		needle = inet_pton (needle);
+	}
 
+	if ((ground.length != 4) && (ground.length != 16)) {
+		if (! isIP (ground)) {
+			return (null);
+		}
+		ground = inet_pton (ground);
+	}
+
+	if ((sky.length != 4) && (sky.length != 16)) {
+		if (! isIP (sky)) {
+			return (null);
+		}
+		sky = inet_pton (sky);
+	}
+
+	if ((needle >= ground) && (needle <= sky)) {
+		return (true);
+	}
+
+	return (false);
 }
 
 module.exports.networkify = networkify;
 function networkify (address, length) {
 	var result, index, octet;
+
+	if ((address.length != 4) && (address.length != 16)) {
+		return (null);
+	}
 
 	// Fix the network to be sure it is really the network based on the length
 	for (index = 0, result = ''; index < address.length; index++) {
@@ -141,6 +276,10 @@ function networkify (address, length) {
 module.exports.broadcastify = broadcastify;
 function broadcastify (address, length) {
 	var result, index, octet;
+
+	if ((address.length != 4) && (address.length != 16)) {
+		return (null);
+	}
 
 	// Calculate the broadcast
 	for (index = 0, result = ''; index < address.length; index++) {
@@ -245,4 +384,41 @@ function inet_ntop (address) {
 		return (result);
 	}
 	return (null);
+}
+
+function inet_ntoi (address) {
+	var index, result = bigint (0);
+
+	if ((address.length != 4) && (address.length != 16)) {
+		return (null);
+	}
+
+	for (index = 0; index < address.length; index++) {
+		result = result.multiply (256).add (address.charCodeAt (index));
+	}
+
+	return (result);
+}
+
+function inet_iton (address, family) {
+	var result = '', index;
+
+	if ((family == 'inet') || (family == 'ipv4') || (family == '4') || (family == 4)) {
+		for (index = 0; index < 4; index++) {
+			result = String.fromCharCode (address.mod (256).valueOf ()) + result;
+			address = address.over (256);
+		}
+		return (result);
+
+	} else if ((family == 'inet6') || (family == 'ipv6') || (family == '6') || (family == 6)) {
+		for (index = 0; index < 16; index++) {
+			result = String.fromCharCode (address.mod (256).valueOf ()) + result;
+			address = address.over (256);
+		}
+		return (result);
+
+	} else {
+		console.info ('here');
+		return (null);
+	}
 }
