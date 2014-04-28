@@ -161,7 +161,8 @@ function cidrToRange (cidr, assumeCorrect) {
 
 module.exports.rangeToCIDR = rangeToCIDR;
 function rangeToCIDR (range) {
-	var result = [], family, position, index;
+	var result = [], family, position, index, network, broadcast;
+	var temp;
 
 	if (! range || range.length != 2) {
 		return (null);
@@ -183,23 +184,25 @@ function rangeToCIDR (range) {
 	}
 
 	if (range [0] > range [1]) {
+		console.warning ('Warning: Range limits are swapped');
 		// Well, that's wrong...
-		var temp = range [1];
+		temp = range [1];
 		range [1] = range [0];
 		range [0] = temp;
 		temp = null;
 	}
 
-	while (range [0] <= range [1]) {
+	range [0] = inet_ntoi (range [0]);
+	range [1] = inet_ntoi (range [1]);
+
+	while (range [0].lesserOrEquals (range [1])) {
 		for (index = 0; index <= ((family == 4) ? 32 : (family == 6) ? 128 : 0); index++) {
-			if ((range [0] == networkify (range [0], index)) && (broadcastify (range [0], index) <= range [1])) {
-				result.push (inet_ntop (range [0]) + '/' + index);
-				range [0] = inet_iton (
-					inet_ntoi (
-						range [0]).add (bigint (2).pow (((family == 4) ? 32 : (family == 6) ? 128 : 0) - index)
-					),
-					family
-				);
+			network = inet_ntoi (networkify (inet_iton (range [0], family), index));
+			broadcast = inet_ntoi (broadcastify (inet_iton (range [0], family), index));
+
+			if (network.equals (range [0]) && broadcast.lesserOrEquals (range [1])) {
+				result.push (inet_ntop (inet_iton (range [0], family)) + '/' + index);
+				range [0] = range [0].add (bigint (2).pow (((family == 4) ? 32 : (family == 6) ? 128 : 0) - index));
 				break;
 			}
 		}
@@ -386,6 +389,7 @@ function inet_ntop (address) {
 	return (null);
 }
 
+module.exports.inet_ntoi = inet_ntoi;
 function inet_ntoi (address) {
 	var index, result = bigint (0);
 
@@ -400,6 +404,7 @@ function inet_ntoi (address) {
 	return (result);
 }
 
+module.exports.inet_iton = inet_iton;
 function inet_iton (address, family) {
 	var result = '', index;
 
